@@ -1,5 +1,4 @@
-# derby-mule-4
-How to use derby with mule 4
+# How to use derby with mule 4
 
 In this code base we will see the use of Derby database (https://db.apache.org/derby/)  as temporary data store solution or can also be considered for use as database, until the actual database is provisioned.
 
