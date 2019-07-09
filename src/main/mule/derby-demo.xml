@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="577d7358-8bea-4946-84b3-98661dd2975b" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<jms:config name="JMS_Config" doc:name="JMS Config" doc:id="f0f8137c-735f-4510-a2a8-960312134210" >
+		<jms:active-mq-connection >
+			<jms:factory-configuration brokerUrl="tcp://localhost:61616" />
+		</jms:active-mq-connection>
+	</jms:config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="021f6f0d-c19d-48b6-bdd4-fcedc89ee3aa" >
+		<db:derby-connection subsubProtocol="memory" create="true" database="tempdatabase">
+		</db:derby-connection>
+	</db:config>
+	<flow name="derby-mule-4-pull-Flow" doc:id="a009f874-0086-47c4-bb9f-a96b67e2aca0" >
+		<http:listener doc:name="Listener" doc:id="d716aace-7af7-4f4e-9e7e-ee76829bc70f" config-ref="HTTP_Listener_config" path="/pull"/>
+		<logger level="INFO" doc:name="Logger" doc:id="fcffd1da-343d-4037-87d2-a357973135c1" message="Fetch the data from database"/>
+		<db:select doc:name="Select" doc:id="c91036c7-bf04-40bc-94f6-6355a83f3130" config-ref="Database_Config">
+			<db:sql >SELECT * FROM EMPLOYEE</db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="8d6ebdc9-2937-4728-b587-ecfcb1338dc6" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="derby-createtable" doc:id="7728fa87-ac5a-4792-bd66-31e523946399" >
+		<http:listener doc:name="Listener" doc:id="b2b0da3e-1fd3-4dbe-b093-ba4ed4e8b63e" config-ref="HTTP_Listener_config" path="/table"/>
+		<logger level="INFO" doc:name="Logger" doc:id="bdefd265-8a7f-4b68-b7be-c5b1e532b3a8" message="Create Table Called"/>
+		<db:execute-script doc:name="Execute script" doc:id="a85b9d58-9c18-46f7-988d-54fa69e4d974" config-ref="Database_Config">
+			<db:sql >CREATE TABLE EMPLOYEE (
+ID VARCHAR(5) NOT NULL ,
+EMPLOYEE_NAME VARCHAR(100) NOT NULL ,
+EMPLOYEE_AGE VARCHAR(3) NOT NULL 
+)</db:sql>
+		</db:execute-script>
+		<ee:transform doc:name="Transform Message" doc:id="10f9d758-8952-4d8b-924b-a78f6aae807a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="derby-delete-data" doc:id="e5882c24-f5ef-4fa2-a195-0135c8d04e1f" >
+		<http:listener doc:name="Listener" doc:id="606499a2-ba9b-4f18-85f8-7687175ef74e" config-ref="HTTP_Listener_config" path="/clear"/>
+		<logger level="INFO" doc:name="Logger" doc:id="57e08b74-7c18-44aa-9471-16404210b56a" message="TRUNCATE TABLE Called"/>
+		<db:execute-script doc:name="Execute script" doc:id="f92f35e9-095e-4bec-aeca-7e7d1f92b2d1" config-ref="Database_Config">
+			<db:sql >TRUNCATE TABLE EMPLOYEE </db:sql>
+		</db:execute-script>
+	</flow>
+	<flow name="pull-jms-message-and-push-into-database" doc:id="c966c872-4ebb-4e08-8d44-c58bc69061fb" >
+		<jms:listener doc:name="JMS Listener" doc:id="a3b79174-4e96-436f-a117-440d533b51f1" config-ref="JMS_Config" destination="mobile.data" ackMode="IMMEDIATE">
+			<jms:consumer-type >
+				<jms:queue-consumer />
+			</jms:consumer-type>
+		</jms:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="07d22d5a-0a55-4184-b9ca-e6f1787e9678" message="JMS data pulled"/>
+		<ee:transform doc:name="Transform Message" doc:id="43991b38-50b9-4539-be1e-d82bae778de1" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<db:bulk-insert doc:name="Bulk insert" doc:id="3320c6e1-b47d-4def-a62a-962ce36bf06d" config-ref="Database_Config">
+			<db:sql >INSERT INTO EMPLOYEE (ID,EMPLOYEE_NAME,EMPLOYEE_AGE) VALUES(:ID,:EMPLOYEE_NAME,:EMPLOYEE_AGE)</db:sql>
+		</db:bulk-insert>
+		<logger level="INFO" doc:name="Logger" doc:id="a4f8b08d-9706-45c9-a6f3-b5b786c52372" message="DB Store done"/>
+	</flow>
+	<flow name="publish-to-queue" doc:id="5c1ef01b-a815-4b58-b15e-07580a679275" >
+		<http:listener doc:name="Listener" doc:id="06652900-e977-4758-b58e-1369ab05844e" config-ref="HTTP_Listener_config" path="/publish"/>
+		<logger level="INFO" doc:name="Logger" doc:id="bed77a08-dfa6-4df1-b749-d7fc0add0636" message="Push data to queue"/>
+		<jms:publish doc:name="Publish" doc:id="e05198a8-fd97-4fc3-b8fb-85c8944e759d" config-ref="JMS_Config" destination="mobile.data">
+			<jms:message outboundContentType="application/json" />
+		</jms:publish>
+	</flow>
+</mule>
